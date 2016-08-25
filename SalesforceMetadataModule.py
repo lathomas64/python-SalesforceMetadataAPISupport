@@ -1,3 +1,7 @@
+"""
+Attempting to use module from: https://github.com/sun30nil/python-SalesforceMetadataAPISupport/blob/master/SalesforceMetadataModule.py
+to handle metadata requests
+"""
 from xml.etree.ElementTree import XML, fromstring, tostring
 import os
 import time
@@ -113,10 +117,10 @@ class SalesforceMetadataModule:
                 _enterpriseXlmns + 'userType').text
             self.userUiSkin = loginResponseXml.find(
                 _enterpriseXlmns + 'userUiSkin').text
-            print '\nLogged In successfully!\n'
+            print('\nLogged In successfully!\n')
         except:
             traceback.print_exc()
-            print "\nLogin Failed. Please try again.\n"
+            print("\nLogin Failed. Please try again.\n")
         pass
 
     def getSessionId(self):
@@ -170,12 +174,12 @@ class SalesforceMetadataModule:
       </soapenv:Envelope>"""
         response = requests.post(
             self.metadataServerUrl, data=body, headers=headers)
-        print "Retrieve Request Sent"
+        print("Retrieve Request Sent")
         retrieveResponse = response.content
         retrieveResponseXml = fromstring(retrieveResponse)
         jobId = retrieveResponseXml.find(
             './/{http://soap.sforce.com/2006/04/metadata}id').text
-        print "Retrieving Job"
+        print("Retrieving Job")
         jobResponse = self.retrieveJob(jobId)
 
         jobResponseXml = fromstring(jobResponse)
@@ -189,10 +193,10 @@ class SalesforceMetadataModule:
             data = base64.b64decode(zipFileContent)
             f.write(data)
             f.close()
-            print "Successfully created the zip file @ ", os.path.abspath(outPutZipFileName)
+            print("Successfully created the zip file @ ", os.path.abspath(outPutZipFileName))
             return True
         else:
-            print "Job Failed"
+            print("Job Failed")
         return False
 
     def retrieveJob(self, processID):
