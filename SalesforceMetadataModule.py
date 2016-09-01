@@ -1,14 +1,12 @@
-from xml.etree.ElementTree import XML, fromstring, tostring
+"""
+Attempting to use module from: https://github.com/sun30nil/python-SalesforceMetadataAPISupport/blob/master/SalesforceMetadataModule.py
+to handle metadata requests
+"""
+from xml.etree.ElementTree import fromstring
 import os
-import time
 import base64
-import csv
-import zipfile
 import traceback
-import time
 import requests
-import subprocess
-import getpass
 import xmltodict
 
 
@@ -26,6 +24,7 @@ __status__ = "Development"
 _xPathXlmns = './/{http://soap.sforce.com/2006/04/metadata}'
 # current version of the api is v34.0
 _salesforceURL = 'https://login.salesforce.com/services/Soap/c/34.0'
+_sandboxURL = 'https://test.salesforce.com/services/Soap/c/34.0'
 # enterprise xml name space
 _enterpriseXlmns = './/{urn:enterprise.soap.sforce.com}'
 
@@ -33,7 +32,10 @@ _enterpriseXlmns = './/{urn:enterprise.soap.sforce.com}'
 # certificates for requests
 
 
-class SalesforceMetadataModule:
+class SalesforceMetadataModule(object):
+    """
+    class representing connection to Salesforce metadata api
+    """
     sessionId = ""
     metadataServerUrl = ""
     serverUrl = ""
@@ -55,7 +57,7 @@ class SalesforceMetadataModule:
     userType = ""
     userUiSkin = ""
 
-    def __init__(self, username, password, s_token):
+    def __init__(self, username, password, s_token, sandbox=False):
         # headers = {'content-type': 'application/soap+xml',  'SOAPAction': ''}
         headers = {'content-type': 'text/xml', 'SOAPAction': 'Create'}
         body = """<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="urn:enterprise.soap.sforce.com">
@@ -70,9 +72,14 @@ class SalesforceMetadataModule:
             </urn:login>
          </soapenv:Body>
       </soapenv:Envelope>"""
-        response = requests.post(_salesforceURL, data=body, headers=headers)
+        if sandbox:
+            login_url = _sandboxURL
+        else:
+            login_url = _salesforceURL
+        response = requests.post(login_url, data=body, headers=headers)
         loginResponseXml = fromstring(response.content)
         try:
+            print(loginResponseXml)
             self.sessionId = loginResponseXml.find(
                 _enterpriseXlmns + 'sessionId').text
             self.metadataServerUrl = loginResponseXml.find(
@@ -113,16 +120,16 @@ class SalesforceMetadataModule:
                 _enterpriseXlmns + 'userType').text
             self.userUiSkin = loginResponseXml.find(
                 _enterpriseXlmns + 'userUiSkin').text
-            print '\nLogged In successfully!\n'
+            print('\nLogged In successfully!\n')
+            print("\nSession ID:"+str(self.sessionId))
         except:
             traceback.print_exc()
-            print "\nLogin Failed. Please try again.\n"
-        pass
+            print("\nLogin Failed. Please try again.\n")
 
-    def getSessionId(self):
+    def get_session_id(self):
         return self.sessionId
 
-    def getMetadataServerUrl(self):
+    def get_metadata_server_url(self):
         return self.metadataServerUrl
 
     def getServerUrl(self):
@@ -141,6 +148,14 @@ class SalesforceMetadataModule:
         return self.orgDefaultCurrencyIsoCode
 
     def retrievePackage(self, members, name, api_version, outPutZipFileName):
+        """
+
+        :param members:
+        :param name:
+        :param api_version:
+        :param outPutZipFileName:
+        :return:
+        """
         headers = {'content-type': 'text/xml', 'SOAPAction': 'retrieve'}
         body = """<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:met="http://soap.sforce.com/2006/04/metadata">
       <soapenv:Header>
@@ -170,12 +185,12 @@ class SalesforceMetadataModule:
       </soapenv:Envelope>"""
         response = requests.post(
             self.metadataServerUrl, data=body, headers=headers)
-        print "Retrieve Request Sent"
+        print("Retrieve Request Sent")
         retrieveResponse = response.content
         retrieveResponseXml = fromstring(retrieveResponse)
         jobId = retrieveResponseXml.find(
             './/{http://soap.sforce.com/2006/04/metadata}id').text
-        print "Retrieving Job"
+        print("Retrieving Job")
         jobResponse = self.retrieveJob(jobId)
 
         jobResponseXml = fromstring(jobResponse)
@@ -189,10 +204,10 @@ class SalesforceMetadataModule:
             data = base64.b64decode(zipFileContent)
             f.write(data)
             f.close()
-            print "Successfully created the zip file @ ", os.path.abspath(outPutZipFileName)
+            print("Successfully created the zip file @ ", os.path.abspath(outPutZipFileName))
             return True
         else:
-            print "Job Failed"
+            print("Job Failed")
         return False
 
     def retrieveJob(self, processID):
@@ -215,6 +230,12 @@ class SalesforceMetadataModule:
         return response.content
 
     def listMetadata(self, metaType, asOfVersion):
+        """
+        pull a list of metadata from salesforce
+        :param metaType: type of data you are interested in
+        :param asOfVersion: The API version for the metadata listing request
+        :return:
+        """
         headers = {'content-type': 'text/xml', 'SOAPAction': 'retrieve'}
         body = """<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:met="http://soap.sforce.com/2006/04/metadata">
          <soapenv:Header>
@@ -240,3 +261,33 @@ class SalesforceMetadataModule:
             self.metadataServerUrl, data=body, headers=headers)
         listOfResult = xmltodict.parse(response.content)
         return listOfResult['soapenv:Envelope']['soapenv:Body'][u'listMetadataResponse'][u'result']
+
+    def readMetadata(self, metaType, fullNames):
+        """
+        Read Metadata from salesforce
+        :param metaType: The type of data ex. CustomObjectTranslation
+        :param fullNames: the full name of the object from ListMetadata
+        :return: metadata for the object requested
+        """
+        headers = {'content-type': 'text/xml', 'SOAPAction': 'retrieve'}
+        body = """<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+        xmlns:met="http://soap.sforce.com/2006/04/metadata">
+         <soapenv:Header>
+            <met:CallOptions>
+            </met:CallOptions>
+            <met:SessionHeader>
+               <met:sessionId>""" + self.sessionId + """</met:sessionId>
+            </met:SessionHeader>
+         </soapenv:Header>
+         <soapenv:Body>
+            <met:readMetadata>
+               <met:type>""" + metaType + """</met:type>
+               <met:fullNames>""" + fullNames + """</met:fullNames>
+            </met:readMetadata>
+         </soapenv:Body>
+      </soapenv:Envelope>"""
+
+        response = requests.post(
+            self.metadataServerUrl, data=body, headers=headers)
+        listOfResult = xmltodict.parse(response.content)
+        return listOfResult['soapenv:Envelope']['soapenv:Body'][u'readMetadataResponse'][u'result']
